@@ -3,41 +3,55 @@
 # format formats stdin and writes to stdout.
 function format() {
     in_code=0
-    previous_line=""
+    previous=""
 
     # Read stdin line-by-line. c.f. https://bit.ly/2AJF4df
     while IFS= read -r line
     do
-        previous_line=$line
-
         # Untabify
-        line=$(echo "$line" | sed 's/$(printf '\t')/        /g')
+        line=$(echo "$line" | sed "s/$(printf '\t')/    /g")
 
+        # Remove trailing spaces
+        line=$(echo "$line" | sed 's/ *$//')
+
+        # If marks a starting/ending of code block.
         if echo $line | grep "^[[:space:]]*\`\`\`" > /dev/null; then
             in_code=$(( (in_code + 1) % 2 ))
 
             # Ensures there is an empty line before the code snippet.
-            if ! echo "$previous_line" | grep "^[[:space:]]*$" > /dev/null \
-	       && [[ "$in_code" == "1" ]]; then
+            if [[ "$previous" != "" && "$in_code" == "1" ]]; then
                     echo ""
             fi
             echo "$line"
         else
+            # If the previous and the current line are both empty, continue.
+            if [[ "$previous" == "" && "$line" == "" ]]; then
+                continue
+            fi
+
             # Ensures there is an empty line after a code snippet.
-            if echo "$previous_line" | grep "^[[:space:]]*\`\`\`" > /dev/null \
-		    && [[ "$in_code" == "0" && "$line" != "" ]]; then
+            if echo "$previous" | grep "^[[:space:]]*\`\`\`" > /dev/null \
+                    && [[ "$in_code" == "0" && "$line" != "" ]]; then
                 echo ""
             fi
 
-	    # Neither in a table, where each line start with |, nor a code
-	    # block, remove trailing spaces added by fold.
+            # Ensure that each title follows a blank line.
+            if echo "$previous" | grep '^#' > /dev/null \
+                    && [[ "$line" != "" ]]; then
+                echo ""
+            fi
+
+            # Neither in a table, where each line start with |, nor a code
+            # block, remove trailing spaces added by fold.
             if ! echo "$line" | grep "^[[:space:]]*|" > /dev/null \
-		    && [[ "$in_code" == "0" ]]; then
-		echo "$line" | fold -s -w 80 | sed 's/ *$//'
+                    && [[ "$in_code" == "0" ]]; then
+                echo "$line" | fold -s -w 80 | sed 's/ *$//'
             else
                 echo "$line"
             fi
         fi
+
+        previous=$line
     done
 }
 
