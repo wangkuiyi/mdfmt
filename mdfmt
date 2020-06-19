@@ -1,0 +1,55 @@
+#!/bin/bash
+
+# format formats stdin and writes to stdout.
+function format() {
+    in_code=0
+    previous_line=""
+
+    # Read stdin line-by-line. c.f. https://bit.ly/2AJF4df
+    while IFS= read -r line
+    do
+        previous_line=$line
+
+        # Untabify
+        line=$(echo "$line" | sed 's/$(printf '\t')/        /g')
+
+        if echo $line | grep "^[[:space:]]*\`\`\`" > /dev/null; then
+            in_code=$(( (in_code + 1) % 2 ))
+
+            # Ensures there is an empty line before the code snippet.
+            if ! echo "$previous_line" | grep "^[[:space:]]*$" > /dev/null \
+	       && [[ "$in_code" == "1" ]]; then
+                    echo ""
+            fi
+            echo "$line"
+        else
+            # Ensures there is an empty line after a code snippet.
+            if echo "$previous_line" | grep "^[[:space:]]*\`\`\`" > /dev/null \
+		    && [[ "$in_code" == "0" && "$line" != "" ]]; then
+                echo ""
+            fi
+
+	    # Neither in a table, where each line start with |, nor a code
+	    # block, remove trailing spaces added by fold.
+            if ! echo "$line" | grep "^[[:space:]]*|" > /dev/null \
+		    && [[ "$in_code" == "0" ]]; then
+		echo "$line" | fold -s -w 80 | sed 's/ *$//'
+            else
+                echo "$line"
+            fi
+        fi
+    done
+}
+
+if [[ "$#" -ne 0 ]]; then
+    for file in "$@"; do
+        if ! echo "$file" | grep '\.md$' > /dev/null; then
+            echo "WARNING: $file doesn't have \.md extension."
+        fi
+        tmpfile=$(mktemp)
+        cat "$file" | format > "$tmpfile"
+        mv "$tmpfile" "$file"
+    done
+else
+    format
+fi
